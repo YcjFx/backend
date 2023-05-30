@@ -232,6 +232,7 @@ def work():
     redata = jsonify(data)
     return redata
 
+
 @app.route('/mycollect', methods=['GET', 'POST'])
 def mycollect():
     collectdata=CollectInfo.query.filter_by(collect_user_id=2023001).all()
@@ -245,6 +246,8 @@ def mycollect():
     redata = jsonify(data)
     return redata
 
+
+
 @app.route('/collect_menu', methods=['GET', 'POST'])
 def collect_menu():
     postdata = request.get_json()  # 字典
@@ -253,6 +256,7 @@ def collect_menu():
                                 collect_user_id=postdata['collect_user_id']).delete()
     db.session.commit()
     return 'success'
+
 
 @app.route('/work_menu', methods=['GET', 'POST'])
 def work_menu():
