@@ -50,4 +50,5 @@ with app.app_context():
     # db.session.add(new_com_id)
     #
     # db.session.commit()
+
      collect_add()
