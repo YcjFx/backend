@@ -282,6 +282,23 @@ def work_menu():
     return 'success'
 
 
+@app.route('/search', methods=['GET', 'POST'])
+def search():
+    postdata = request.get_json()  # 字典
+    print(postdata, file=sys.stderr)
+    search_str=postdata['searchdata']
+
+    results = CommodityInfo.query.filter(CommodityInfo.commodity_name.like(f'%{search_str}%')).all()
+    data = {'data': [
+        {'imageSrc': r.commodity_img, 'title': r.commodity_name, 'price': r.commodity_price,
+         'eshop': r.commodity_eshop} for r in results]}
+    redata = jsonify(data)
+    return redata
+
+    #搜索查询
+
+    # return 'success'
+
 
 
 
