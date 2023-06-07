@@ -7,7 +7,7 @@ app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///D:/001_CODE_PROJECTS/JNU/test
 db = SQLAlchemy(app)
 
 
-# collect_info表
+# collect_info表1
 class CollectInfo(db.Model):
     __tablename__ = 'commodity_collect'
     id = db.Column(db.Integer, primary_key=True)
