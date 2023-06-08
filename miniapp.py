@@ -3,6 +3,7 @@ from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import func
 import sys
 from flask_cors import CORS
+from datetime import datetime
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///E:/flask_mp/test.db'
 db = SQLAlchemy(app)
@@ -71,10 +72,39 @@ def index():
     name = CommodityInfo.commodity_name
     price = CommodityInfo.commodity_price
     shop = CommodityInfo.commodity_eshop
-    results = CommodityInfo.query.order_by(img, name, price, shop).limit(5).all()
+    # results = CommodityInfo.query.order_by(img, name, price, shop).limit(5).all()
+    results = CommodityInfo.query.order_by(img, name, price, shop).all()
+
+    #根据商品名去重
+    new_data={}
+    for i,item in enumerate(results):
+        new_data[i]=item.commodity_name
+
+    unique_dict = {}
+    seen_values = []
+
+    for key, value in new_data.items():
+        if value not in seen_values:
+            unique_dict[key] = value
+            seen_values.append(value)
+
+    #选择不重复的元素进结果
+    new_results=[results[key] for key in unique_dict]
+
+    #替换日期最新的数据
+    return_results=[]
+
+    for item in new_results:
+        return_results.append(CommodityInfo.query.filter_by(commodity_name=item.commodity_name).order_by(CommodityInfo.release_time.desc()).first())
+
+    #爆料排序，先价格因素后时间因素
+    return_results = sorted(return_results,
+                            key=lambda x: (-(float(x.commodity_price)-float(CommodityInfo.query.filter_by(commodity_name=x.commodity_name).with_entities(db.func.min(CommodityInfo.commodity_price)).scalar())), datetime.strptime(x.release_time[5:10], '%m-%d')),
+                            reverse=True)
+
     data = {'data': [
         {'imageSrc': r.commodity_img, 'title': r.commodity_name, 'price': r.commodity_price,
-         'eshop': r.commodity_eshop} for r in results]}
+         'eshop': r.commodity_eshop,'date':r.release_time[5:10]} for r in return_results]}
     redata = jsonify(data)
     return redata
 
@@ -84,9 +114,12 @@ def shop():
     postdata = request.get_json()  # 字典
     #获取商品图片路径
     imgpath=postdata['commodity_img']
-    search_data = CommodityInfo.query.filter_by(commodity_img=imgpath)
+    search_data = CommodityInfo.query.filter_by(commodity_img=imgpath).all()
+    last_search_data =[search_data[-1]]
+
+
     commodity_id=int(imgpath[12:19])
-    comment_data = CommenttInfo.query.filter_by(commodity_id=commodity_id)
+    comment_data = CommenttInfo.query.filter_by(commodity_id=commodity_id).all()
 
     # 查询value值
     count = ValueInfo.query.with_entities(func.count(ValueInfo.commodity_id)).filter_by(
@@ -108,14 +141,21 @@ def shop():
             if(collectdata[0].iscollect=='true'):
                 iscollect = True
 
+    #获取商品时间列表
+    price_data=[r.commodity_price for r in search_data]
+    date_data = [r.release_time[5:10] for r in search_data]
+    print(price_data)
+    print(date_data)
+
     data = {'data': [
                     {'comImageSrc': r.commodity_img, 'comPrice': r.commodity_price,
                      'comShop': r.commodity_eshop,'comWriter':r.user_id, 'comName':r.commodity_name,
-                     'comDesc': r.commodity_desc }for r in search_data],
+                     'comDesc': r.commodity_desc }for r in last_search_data],
             'comments':[i.user_comment for i in comment_data],
             'percentage_data':{'ispercentage': ispercentage,
                                'nopercentage': nopercentage},
             'iscollect':iscollect,
+            'chartData':{'series':price_data,'categories':date_data},
     }
     redata = jsonify(data)
     return redata
@@ -220,12 +260,42 @@ def collect():
 
 @app.route('/work', methods=['GET', 'POST'])
 def work():
-
-    results = CommodityInfo.query.filter_by(user_id=2023001).all()
     count = CommodityInfo.query.with_entities(func.count(CommodityInfo.user_id)).filter_by(
-                user_id=2023001).scalar()
+        user_id=2023001).scalar()
+    results = CommodityInfo.query.filter_by(user_id=2023001).all()
+    # 根据商品名去重
+    new_data = {}
+    for i, item in enumerate(results):
+        new_data[i] = item.commodity_name
+
+    unique_dict = {}
+    seen_values = []
+
+    for key, value in new_data.items():
+        if value not in seen_values:
+            unique_dict[key] = value
+            seen_values.append(value)
+
+    # 选择不重复的元素进结果
+    new_results = [results[key] for key in unique_dict]
+
+    # 替换日期最新的数据
+    return_results = []
+
+    for item in new_results:
+        return_results.append(CommodityInfo.query.filter_by(commodity_name=item.commodity_name).order_by(
+            CommodityInfo.release_time.desc()).first())
+
+    # 爆料排序，先价格因素后时间因素
+    return_results = sorted(return_results,
+                            key=lambda x: (-(float(x.commodity_price) - float(
+                                CommodityInfo.query.filter_by(commodity_name=x.commodity_name).with_entities(
+                                    db.func.min(CommodityInfo.commodity_price)).scalar())),
+                                           datetime.strptime(x.release_time[5:10], '%m-%d')),
+                            reverse=True)
+
     data = {'data': [{'imageSrc': r.commodity_img, 'title': r.commodity_name, 'price': r.commodity_price,
-                    'eshop': r.commodity_eshop} for r in results],
+                    'eshop': r.commodity_eshop,'date':r.release_time[5:10]} for r in return_results],
             'count':count
             }
     print(data, file=sys.stderr)
@@ -239,8 +309,40 @@ def mycollect():
     collects=[co.commodity_id for co in collectdata]
     results = CommodityInfo.query.filter(CommodityInfo.commodity_id.in_(collects)).all()
 
+    # 根据商品名去重
+    new_data = {}
+    for i, item in enumerate(results):
+        new_data[i] = item.commodity_name
+
+    unique_dict = {}
+    seen_values = []
+
+    for key, value in new_data.items():
+        if value not in seen_values:
+            unique_dict[key] = value
+            seen_values.append(value)
+
+    # 选择不重复的元素进结果
+    new_results = [results[key] for key in unique_dict]
+
+    # 替换日期最新的数据
+    return_results = []
+
+    for item in new_results:
+        return_results.append(CommodityInfo.query.filter_by(commodity_name=item.commodity_name).order_by(
+            CommodityInfo.release_time.desc()).first())
+
+    # 爆料排序，先价格因素后时间因素
+    return_results = sorted(return_results,
+                            key=lambda x: (-(float(x.commodity_price) - float(
+                                CommodityInfo.query.filter_by(commodity_name=x.commodity_name).with_entities(
+                                    db.func.min(CommodityInfo.commodity_price)).scalar())),
+                                           datetime.strptime(x.release_time[5:10], '%m-%d')),
+                            reverse=True)
+
+
     data = {'data': [{'imageSrc': r.commodity_img, 'title': r.commodity_name, 'price': r.commodity_price,
-                     'eshop': r.commodity_eshop} for r in results]
+                     'eshop': r.commodity_eshop,'date':r.release_time[5:10]} for r in return_results]
             }
     print(data, file=sys.stderr)
     redata = jsonify(data)
@@ -289,9 +391,43 @@ def search():
     search_str=postdata['searchdata']
 
     results = CommodityInfo.query.filter(CommodityInfo.commodity_name.like(f'%{search_str}%')).all()
+
+    # 根据商品名去重
+    new_data = {}
+    for i, item in enumerate(results):
+        new_data[i] = item.commodity_name
+
+    unique_dict = {}
+    seen_values = []
+
+    for key, value in new_data.items():
+        if value not in seen_values:
+            unique_dict[key] = value
+            seen_values.append(value)
+
+    # 选择不重复的元素进结果
+    new_results = [results[key] for key in unique_dict]
+
+    # 替换日期最新的数据
+    return_results = []
+
+    for item in new_results:
+        return_results.append(CommodityInfo.query.filter_by(commodity_name=item.commodity_name).order_by(
+            CommodityInfo.release_time.desc()).first())
+
+    # 爆料排序，先价格因素后时间因素
+    return_results = sorted(return_results,
+                            key=lambda x: (-(float(x.commodity_price) - float(
+                                CommodityInfo.query.filter_by(commodity_name=x.commodity_name).with_entities(
+                                    db.func.min(CommodityInfo.commodity_price)).scalar())),
+                                           datetime.strptime(x.release_time[5:10], '%m-%d')),
+                            reverse=True)
+
+
+
     data = {'data': [
         {'imageSrc': r.commodity_img, 'title': r.commodity_name, 'price': r.commodity_price,
-         'eshop': r.commodity_eshop} for r in results]}
+         'eshop': r.commodity_eshop,'date':r.release_time[5:10]} for r in return_results]}
     redata = jsonify(data)
     return redata
 
